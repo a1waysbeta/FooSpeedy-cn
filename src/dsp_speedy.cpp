@@ -108,7 +108,7 @@ public:
     }
 
     static void g_get_name(pfc::string_base& out) {
-        out = "Speedy (Speed/Pitch)";
+        out = "Speedy（变速/变调）";
     }
 
     static bool g_get_default_preset(dsp_preset& out) {
@@ -511,10 +511,10 @@ static dsp_factory_t<dsp_speedy> g_dsp_speedy_factory;
 DECLARE_COMPONENT_VERSION(
     "Speedy DSP",
     "1.0.0",
-    "Audio speed and pitch manipulation using Google's Speedy algorithm.\n"
-    "Based on the Mach1 nonlinear speech speedup algorithm.\n\n"
-    "Speedy: Copyright 2022 Google LLC (Apache 2.0)\n"
-    "Sonic: Copyright 2010 Bill Cox (Apache 2.0)"
+    "使用 Google Speedy 算法进行音频变速和变调处理。\n"
+    "基于 Mach1 非线性语音加速算法。\n\n"
+    "Speedy: 版权所有 2022 Google LLC (Apache 2.0)\n"
+    "Sonic: 版权所有 2010 Bill Cox (Apache 2.0)"
 );
 
 // Validate that we're building against compatible SDK
