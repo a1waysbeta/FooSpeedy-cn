@@ -17,11 +17,6 @@ jobs:
     - name: Setup MSBuild
       uses: microsoft/setup-msbuild@v2
 
-    - name: Setup Windows SDK environment
-      shell: cmd
-      run: |
-        call "%ProgramFiles(x86)%\Microsoft Visual Studio\2022\Enterprise\Common7\Tools\VsDevCmd.bat"
-
     - name: Clone foobar2000 SDK
       uses: actions/checkout@v4
       with:
