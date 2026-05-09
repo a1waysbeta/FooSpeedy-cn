@@ -45,6 +45,28 @@ jobs:
         repository: mborgerding/kissfft
         path: lib/kissfft
 
+    - name: Fix resource compiler issue - add Windows controls header
+      shell: pwsh
+      run: |
+        # 修复 .rc 文件，添加必要的头文件
+        $rcFile = "src/foo_dsp_speedy.rc"
+        if (Test-Path $rcFile) {
+          $content = Get-Content $rcFile -Raw
+          # 检查是否已经包含 windows.h 或 commctrl.h
+          if ($content -notmatch '#include <windows.h>' -and $content -notmatch '#include "windows.h"') {
+            # 在文件开头添加必要的头文件
+            $newContent = @'
+#include <windows.h>
+#include <commctrl.h>
+
+'@ + $content
+            Set-Content $rcFile $newContent -NoNewline
+            Write-Host "Fixed $rcFile - added windows.h and commctrl.h"
+          } else {
+            Write-Host "$rcFile already has required includes"
+          }
+        }
+
     - name: Fix Platform Toolset for GitHub Actions
       shell: pwsh
       run: |
@@ -78,9 +100,32 @@ jobs:
         New-Item -ItemType Directory -Force -Path $stageDir
         New-Item -ItemType Directory -Force -Path "$stageDir/x64"
 
+        # Create bin directories if they don't exist
+        if (-not (Test-Path "bin/Release/Win32")) {
+          Write-Host "Warning: bin/Release/Win32 not found, searching for DLL..."
+          Get-ChildItem -Recurse -Filter "foo_dsp_speedy.dll" | ForEach-Object {
+            Write-Host "Found DLL at: $($_.FullName)"
+          }
+        }
+
         # Copy DLLs
-        Copy-Item "bin/Release/Win32/foo_dsp_speedy.dll" "$stageDir/foo_dsp_speedy.dll"
-        Copy-Item "bin/Release/x64/foo_dsp_speedy.dll" "$stageDir/x64/foo_dsp_speedy.dll"
+        if (Test-Path "bin/Release/Win32/foo_dsp_speedy.dll") {
+          Copy-Item "bin/Release/Win32/foo_dsp_speedy.dll" "$stageDir/foo_dsp_speedy.dll"
+        } elseif (Test-Path "Release/foo_dsp_speedy.dll") {
+          Copy-Item "Release/foo_dsp_speedy.dll" "$stageDir/foo_dsp_speedy.dll"
+        } else {
+          Write-Host "ERROR: Cannot find foo_dsp_speedy.dll for Win32"
+          exit 1
+        }
+
+        if (Test-Path "bin/Release/x64/foo_dsp_speedy.dll") {
+          Copy-Item "bin/Release/x64/foo_dsp_speedy.dll" "$stageDir/x64/foo_dsp_speedy.dll"
+        } elseif (Test-Path "x64/Release/foo_dsp_speedy.dll") {
+          Copy-Item "x64/Release/foo_dsp_speedy.dll" "$stageDir/x64/foo_dsp_speedy.dll"
+        } else {
+          Write-Host "ERROR: Cannot find foo_dsp_speedy.dll for x64"
+          exit 1
+        }
 
         # Create release directory
         New-Item -ItemType Directory -Force -Path "release"
