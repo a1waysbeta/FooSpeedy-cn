@@ -5,6 +5,7 @@ on:
     branches: [master, main]
   pull_request:
     branches: [master, main]
+  workflow_dispatch:
 
 permissions:
   contents: write
@@ -21,14 +22,39 @@ jobs:
       uses: microsoft/setup-msbuild@v2
 
     - name: Clone dependencies
-      shell: cmd
+      uses: actions/checkout@v4
+      with:
+        repository: reupen/foobar2000-sdk-unmodified
+        path: lib/foobar2000_SDK
+
+    - name: Clone sonic
+      uses: actions/checkout@v4
+      with:
+        repository: waywardgeek/sonic
+        path: lib/sonic_repo
+
+    - name: Clone speedy
+      uses: actions/checkout@v4
+      with:
+        repository: google/speedy
+        path: lib/speedy_repo
+
+    - name: Clone kissfft
+      uses: actions/checkout@v4
+      with:
+        repository: mborgerding/kissfft
+        path: lib/kissfft
+
+    - name: Fix Platform Toolset for GitHub Actions
+      shell: pwsh
       run: |
-        mkdir lib
-        cd lib
-        git clone --depth 1 https://github.com/reupen/foobar2000-sdk-unmodified.git foobar2000_SDK
-        git clone --depth 1 https://github.com/waywardgeek/sonic.git sonic_repo
-        git clone --depth 1 https://github.com/google/speedy.git speedy_repo
-        git clone --depth 1 https://github.com/mborgerding/kissfft.git kissfft
+        Get-ChildItem -Recurse -Filter *.vcxproj | ForEach-Object {
+          $content = Get-Content $_.FullName -Raw
+          if ($content -match 'v14[0-9]+') {
+            Write-Host "Fixing: $($_.Name)"
+            $content -replace 'v14[0-9]+', 'v143' | Set-Content $_.FullName -NoNewline
+          }
+        }
 
     - name: Build Win32 Release
       shell: cmd
