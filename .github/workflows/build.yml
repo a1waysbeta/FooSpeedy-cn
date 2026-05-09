@@ -45,18 +45,17 @@ jobs:
         repository: mborgerding/kissfft
         path: lib/kissfft
 
-    - name: Fix resource compiler issue - add Windows controls header
-      shell: pwsh
+    - name: Fix resource compiler issue - direct fix
+      shell: cmd
       run: |
-        $rcFile = "src/foo_dsp_speedy.rc"
-        if (Test-Path $rcFile) {
-          $content = Get-Content $rcFile -Raw
-          if ($content -notmatch '#include <windows.h>' -and $content -notmatch '#include "windows.h"') {
-            $newContent = "#include <windows.h>`n#include <commctrl.h>`n`n" + $content
-            Set-Content $rcFile $newContent -NoNewline
-            Write-Host "Fixed $rcFile"
-          }
-        }
+        echo Fixing foo_dsp_speedy.rc file...
+        echo #include ^<windows.h^> > temp_rc.txt
+        echo #include ^<commctrl.h^> >> temp_rc.txt
+        echo. >> temp_rc.txt
+        type src\foo_dsp_speedy.rc >> temp_rc.txt
+        copy /y temp_rc.txt src\foo_dsp_speedy.rc
+        echo Fixed RC file:
+        type src\foo_dsp_speedy.rc
 
     - name: Fix Platform Toolset for GitHub Actions
       shell: pwsh
@@ -89,19 +88,30 @@ jobs:
         New-Item -ItemType Directory -Force -Path $stageDir
         New-Item -ItemType Directory -Force -Path "$stageDir/x64"
 
-        if (Test-Path "bin/Release/Win32/foo_dsp_speedy.dll") {
-          Copy-Item "bin/Release/Win32/foo_dsp_speedy.dll" "$stageDir/foo_dsp_speedy.dll"
-        } elseif (Test-Path "Release/foo_dsp_speedy.dll") {
-          Copy-Item "Release/foo_dsp_speedy.dll" "$stageDir/foo_dsp_speedy.dll"
+        # Find and copy DLLs from likely locations
+        $win32Dll = @(
+          "bin/Release/Win32/foo_dsp_speedy.dll",
+          "Release/foo_dsp_speedy.dll",
+          "Win32/Release/foo_dsp_speedy.dll"
+        ) | Where-Object { Test-Path $_ } | Select-Object -First 1
+
+        $x64Dll = @(
+          "bin/Release/x64/foo_dsp_speedy.dll",
+          "x64/Release/foo_dsp_speedy.dll"
+        ) | Where-Object { Test-Path $_ } | Select-Object -First 1
+
+        if ($win32Dll) {
+          Copy-Item $win32Dll "$stageDir/foo_dsp_speedy.dll"
+          Write-Host "Copied Win32 DLL from: $win32Dll"
         } else {
           Write-Host "ERROR: Cannot find foo_dsp_speedy.dll for Win32"
+          Get-ChildItem -Recurse -Filter "*.dll" | ForEach-Object { Write-Host "Found DLL: $($_.FullName)" }
           exit 1
         }
 
-        if (Test-Path "bin/Release/x64/foo_dsp_speedy.dll") {
-          Copy-Item "bin/Release/x64/foo_dsp_speedy.dll" "$stageDir/x64/foo_dsp_speedy.dll"
-        } elseif (Test-Path "x64/Release/foo_dsp_speedy.dll") {
-          Copy-Item "x64/Release/foo_dsp_speedy.dll" "$stageDir/x64/foo_dsp_speedy.dll"
+        if ($x64Dll) {
+          Copy-Item $x64Dll "$stageDir/x64/foo_dsp_speedy.dll"
+          Write-Host "Copied x64 DLL from: $x64Dll"
         } else {
           Write-Host "ERROR: Cannot find foo_dsp_speedy.dll for x64"
           exit 1
