@@ -1,11 +1,7 @@
 // Microsoft Visual C++ generated resource script.
 //
 #include <windows.h>
-
-#ifndef RC_INVOKED
 #include <commctrl.h>
-#endif
-
 #include "resource.h"
 
 #define APSTUDIO_READONLY_SYMBOLS
