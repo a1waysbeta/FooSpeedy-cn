@@ -8,7 +8,7 @@ permissions:
 
 jobs:
   build:
-    runs-on: windows-latest
+    runs-on: windows-2022
 
     steps:
     - name: Checkout repository
@@ -17,7 +17,12 @@ jobs:
     - name: Setup MSBuild
       uses: microsoft/setup-msbuild@v2
 
-    - name: Clone dependencies
+    - name: Setup Windows SDK environment
+      shell: cmd
+      run: |
+        call "%ProgramFiles(x86)%\Microsoft Visual Studio\2022\Enterprise\Common7\Tools\VsDevCmd.bat"
+
+    - name: Clone foobar2000 SDK
       uses: actions/checkout@v4
       with:
         repository: reupen/foobar2000-sdk-unmodified
@@ -41,26 +46,38 @@ jobs:
         repository: mborgerding/kissfft
         path: lib/kissfft
 
-    - name: Fix Platform Toolset for GitHub Actions
+    - name: Fix Platform Toolset
       shell: pwsh
       run: |
         Get-ChildItem -Recurse -Filter *.vcxproj | ForEach-Object {
           $content = Get-Content $_.FullName -Raw
-          if ($content -match 'v14[0-9]+') {
-            Write-Host "Fixing: $($_.Name)"
-            $content -replace 'v14[0-9]+', 'v143' | Set-Content $_.FullName -NoNewline
-          }
+
+          $content = $content -replace 'v140', 'v143'
+          $content = $content -replace 'v141', 'v143'
+          $content = $content -replace 'v142', 'v143'
+
+          Set-Content $_.FullName $content -NoNewline
         }
 
     - name: Build Win32 Release
       shell: cmd
       run: |
-        msbuild foo_dsp_speedy.sln -p:Configuration=Release -p:Platform=Win32 -p:PlatformToolset=v143 -verbosity:minimal
+        msbuild foo_dsp_speedy.sln ^
+          /p:Configuration=Release ^
+          /p:Platform=Win32 ^
+          /p:PlatformToolset=v143 ^
+          /m ^
+          /verbosity:minimal
 
     - name: Build x64 Release
       shell: cmd
       run: |
-        msbuild foo_dsp_speedy.sln -p:Configuration=Release -p:Platform=x64 -p:PlatformToolset=v143 -verbosity:minimal
+        msbuild foo_dsp_speedy.sln ^
+          /p:Configuration=Release ^
+          /p:Platform=x64 ^
+          /p:PlatformToolset=v143 ^
+          /m ^
+          /verbosity:minimal
 
     - name: Create fb2k-component package
       shell: pwsh
@@ -69,48 +86,55 @@ jobs:
         $version = "manual-$commitHash"
 
         $stageDir = "staging"
-        New-Item -ItemType Directory -Force -Path $stageDir
-        New-Item -ItemType Directory -Force -Path "$stageDir/x64"
 
-        # Find and copy DLLs
+        New-Item -ItemType Directory -Force -Path $stageDir | Out-Null
+        New-Item -ItemType Directory -Force -Path "$stageDir\x64" | Out-Null
+        New-Item -ItemType Directory -Force -Path "release" | Out-Null
+
+        # 查找 Win32 DLL
         $win32Dll = @(
-          "bin/Release/Win32/foo_dsp_speedy.dll",
-          "Release/foo_dsp_speedy.dll"
+          "Release\foo_dsp_speedy.dll",
+          "bin\Release\Win32\foo_dsp_speedy.dll",
+          "Win32\Release\foo_dsp_speedy.dll"
         ) | Where-Object { Test-Path $_ } | Select-Object -First 1
 
+        if (-not $win32Dll) {
+          Write-Error "Cannot find Win32 DLL"
+          exit 1
+        }
+
+        Copy-Item $win32Dll "$stageDir\foo_dsp_speedy.dll"
+
+        # 查找 x64 DLL
         $x64Dll = @(
-          "bin/Release/x64/foo_dsp_speedy.dll",
-          "x64/Release/foo_dsp_speedy.dll"
+          "x64\Release\foo_dsp_speedy.dll",
+          "bin\Release\x64\foo_dsp_speedy.dll"
         ) | Where-Object { Test-Path $_ } | Select-Object -First 1
 
-        if ($win32Dll) {
-          Copy-Item $win32Dll "$stageDir/foo_dsp_speedy.dll"
-        } else {
-          Write-Host "ERROR: Cannot find Win32 DLL"
+        if (-not $x64Dll) {
+          Write-Error "Cannot find x64 DLL"
           exit 1
         }
 
-        if ($x64Dll) {
-          Copy-Item $x64Dll "$stageDir/x64/foo_dsp_speedy.dll"
-        } else {
-          Write-Host "ERROR: Cannot find x64 DLL"
-          exit 1
-        }
+        Copy-Item $x64Dll "$stageDir\x64\foo_dsp_speedy.dll"
 
-        New-Item -ItemType Directory -Force -Path "release"
+        # 创建版本包
+        $zipPath = "release\foo_dsp_speedy-$version.zip"
+        $componentPath = "release\foo_dsp_speedy-$version.fb2k-component"
 
-        $zipPath = "release/foo_dsp_speedy-$version.zip"
-        $componentPath = "release/foo_dsp_speedy-$version.fb2k-component"
-        Compress-Archive -Path "$stageDir/*" -DestinationPath $zipPath -Force
+        Compress-Archive -Path "$stageDir\*" -DestinationPath $zipPath -Force
         Move-Item $zipPath $componentPath -Force
 
-        $latestZip = "release/foo_dsp_speedy-latest.zip"
-        $latestComponent = "release/foo_dsp_speedy-latest.fb2k-component"
-        Compress-Archive -Path "$stageDir/*" -DestinationPath $latestZip -Force
+        # 创建 latest 包
+        $latestZip = "release\foo_dsp_speedy-latest.zip"
+        $latestComponent = "release\foo_dsp_speedy-latest.fb2k-component"
+
+        Compress-Archive -Path "$stageDir\*" -DestinationPath $latestZip -Force
         Move-Item $latestZip $latestComponent -Force
 
+        Write-Host ""
         Write-Host "Created packages:"
-        Get-ChildItem release/*.fb2k-component
+        Get-ChildItem release\*.fb2k-component
 
     - name: Upload artifact
       uses: actions/upload-artifact@v4
@@ -134,8 +158,9 @@ jobs:
           ## Features
           - Speed control (0.25x - 4.0x)
           - Pitch control (0.5x - 2.0x)
-          - Nonlinear speedup mode for speech (Google Speedy/Mach1 algorithm)
+          - Nonlinear speech acceleration
           - Supports both 32-bit and 64-bit foobar2000
+
         files: release/*.fb2k-component
         prerelease: true
       env:
