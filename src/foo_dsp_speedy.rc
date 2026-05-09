@@ -1,5 +1,7 @@
 // Microsoft Visual C++ generated resource script.
 //
+#define _WIN32_IE 0x0500
+#define _WIN32_WINNT 0x0500
 #include <windows.h>
 #include <commctrl.h>
 #include "resource.h"
