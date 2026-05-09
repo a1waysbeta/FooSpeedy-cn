@@ -1,10 +1,6 @@
 name: Build and Release
 
 on:
-  push:
-    branches: [master, main]
-  pull_request:
-    branches: [master, main]
   workflow_dispatch:
 
 permissions:
@@ -45,18 +41,6 @@ jobs:
         repository: mborgerding/kissfft
         path: lib/kissfft
 
-    - name: Fix resource compiler issue - direct fix
-      shell: cmd
-      run: |
-        echo Fixing foo_dsp_speedy.rc file...
-        echo #include ^<windows.h^> > temp_rc.txt
-        echo #include ^<commctrl.h^> >> temp_rc.txt
-        echo. >> temp_rc.txt
-        type src\foo_dsp_speedy.rc >> temp_rc.txt
-        copy /y temp_rc.txt src\foo_dsp_speedy.rc
-        echo Fixed RC file:
-        type src\foo_dsp_speedy.rc
-
     - name: Fix Platform Toolset for GitHub Actions
       shell: pwsh
       run: |
@@ -82,17 +66,16 @@ jobs:
       shell: pwsh
       run: |
         $commitHash = git rev-parse --short HEAD
-        $version = "latest-$commitHash"
+        $version = "manual-$commitHash"
 
         $stageDir = "staging"
         New-Item -ItemType Directory -Force -Path $stageDir
         New-Item -ItemType Directory -Force -Path "$stageDir/x64"
 
-        # Find and copy DLLs from likely locations
+        # Find and copy DLLs
         $win32Dll = @(
           "bin/Release/Win32/foo_dsp_speedy.dll",
-          "Release/foo_dsp_speedy.dll",
-          "Win32/Release/foo_dsp_speedy.dll"
+          "Release/foo_dsp_speedy.dll"
         ) | Where-Object { Test-Path $_ } | Select-Object -First 1
 
         $x64Dll = @(
@@ -102,18 +85,15 @@ jobs:
 
         if ($win32Dll) {
           Copy-Item $win32Dll "$stageDir/foo_dsp_speedy.dll"
-          Write-Host "Copied Win32 DLL from: $win32Dll"
         } else {
-          Write-Host "ERROR: Cannot find foo_dsp_speedy.dll for Win32"
-          Get-ChildItem -Recurse -Filter "*.dll" | ForEach-Object { Write-Host "Found DLL: $($_.FullName)" }
+          Write-Host "ERROR: Cannot find Win32 DLL"
           exit 1
         }
 
         if ($x64Dll) {
           Copy-Item $x64Dll "$stageDir/x64/foo_dsp_speedy.dll"
-          Write-Host "Copied x64 DLL from: $x64Dll"
         } else {
-          Write-Host "ERROR: Cannot find foo_dsp_speedy.dll for x64"
+          Write-Host "ERROR: Cannot find x64 DLL"
           exit 1
         }
 
@@ -140,13 +120,12 @@ jobs:
         retention-days: 90
 
     - name: Update latest release
-      if: github.event_name == 'push' && (github.ref == 'refs/heads/master' || github.ref == 'refs/heads/main')
       uses: softprops/action-gh-release@v2
       with:
         tag_name: latest
         name: Latest Build
         body: |
-          Automatic build from commit ${{ github.sha }}
+          Manual build from commit ${{ github.sha }}
 
           ## Installation
           1. Download `foo_dsp_speedy-latest.fb2k-component`
