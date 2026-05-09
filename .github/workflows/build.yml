@@ -48,22 +48,13 @@ jobs:
     - name: Fix resource compiler issue - add Windows controls header
       shell: pwsh
       run: |
-        # 修复 .rc 文件，添加必要的头文件
         $rcFile = "src/foo_dsp_speedy.rc"
         if (Test-Path $rcFile) {
           $content = Get-Content $rcFile -Raw
-          # 检查是否已经包含 windows.h 或 commctrl.h
           if ($content -notmatch '#include <windows.h>' -and $content -notmatch '#include "windows.h"') {
-            # 在文件开头添加必要的头文件
-            $newContent = @'
-#include <windows.h>
-#include <commctrl.h>
-
-'@ + $content
+            $newContent = "#include <windows.h>`n#include <commctrl.h>`n`n" + $content
             Set-Content $rcFile $newContent -NoNewline
-            Write-Host "Fixed $rcFile - added windows.h and commctrl.h"
-          } else {
-            Write-Host "$rcFile already has required includes"
+            Write-Host "Fixed $rcFile"
           }
         }
 
@@ -91,24 +82,13 @@ jobs:
     - name: Create fb2k-component package
       shell: pwsh
       run: |
-        # Get short commit hash for versioning
         $commitHash = git rev-parse --short HEAD
         $version = "latest-$commitHash"
 
-        # Create staging directory
         $stageDir = "staging"
         New-Item -ItemType Directory -Force -Path $stageDir
         New-Item -ItemType Directory -Force -Path "$stageDir/x64"
 
-        # Create bin directories if they don't exist
-        if (-not (Test-Path "bin/Release/Win32")) {
-          Write-Host "Warning: bin/Release/Win32 not found, searching for DLL..."
-          Get-ChildItem -Recurse -Filter "foo_dsp_speedy.dll" | ForEach-Object {
-            Write-Host "Found DLL at: $($_.FullName)"
-          }
-        }
-
-        # Copy DLLs
         if (Test-Path "bin/Release/Win32/foo_dsp_speedy.dll") {
           Copy-Item "bin/Release/Win32/foo_dsp_speedy.dll" "$stageDir/foo_dsp_speedy.dll"
         } elseif (Test-Path "Release/foo_dsp_speedy.dll") {
@@ -127,16 +107,13 @@ jobs:
           exit 1
         }
 
-        # Create release directory
         New-Item -ItemType Directory -Force -Path "release"
 
-        # Create zip then rename to fb2k-component
         $zipPath = "release/foo_dsp_speedy-$version.zip"
         $componentPath = "release/foo_dsp_speedy-$version.fb2k-component"
         Compress-Archive -Path "$stageDir/*" -DestinationPath $zipPath -Force
         Move-Item $zipPath $componentPath -Force
 
-        # Also create a "latest" version
         $latestZip = "release/foo_dsp_speedy-latest.zip"
         $latestComponent = "release/foo_dsp_speedy-latest.fb2k-component"
         Compress-Archive -Path "$stageDir/*" -DestinationPath $latestZip -Force
