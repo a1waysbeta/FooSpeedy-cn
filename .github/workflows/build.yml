@@ -46,11 +46,7 @@ jobs:
       run: |
         Get-ChildItem -Recurse -Filter *.vcxproj | ForEach-Object {
           $content = Get-Content $_.FullName -Raw
-
-          $content = $content -replace 'v140', 'v143'
-          $content = $content -replace 'v141', 'v143'
-          $content = $content -replace 'v142', 'v143'
-
+          $content = $content -replace 'v14[0-9]', 'v143'
           Set-Content $_.FullName $content -NoNewline
         }
 
@@ -77,16 +73,11 @@ jobs:
     - name: Create fb2k-component package
       shell: pwsh
       run: |
-        $commitHash = git rev-parse --short HEAD
-        $version = "manual-$commitHash"
-
         $stageDir = "staging"
-
         New-Item -ItemType Directory -Force -Path $stageDir | Out-Null
         New-Item -ItemType Directory -Force -Path "$stageDir\x64" | Out-Null
-        New-Item -ItemType Directory -Force -Path "release" | Out-Null
 
-        # 查找 Win32 DLL
+        # Find and copy Win32 DLL
         $win32Dll = @(
           "Release\foo_dsp_speedy.dll",
           "bin\Release\Win32\foo_dsp_speedy.dll",
@@ -97,10 +88,9 @@ jobs:
           Write-Error "Cannot find Win32 DLL"
           exit 1
         }
-
         Copy-Item $win32Dll "$stageDir\foo_dsp_speedy.dll"
 
-        # 查找 x64 DLL
+        # Find and copy x64 DLL
         $x64Dll = @(
           "x64\Release\foo_dsp_speedy.dll",
           "bin\Release\x64\foo_dsp_speedy.dll"
@@ -110,32 +100,19 @@ jobs:
           Write-Error "Cannot find x64 DLL"
           exit 1
         }
-
         Copy-Item $x64Dll "$stageDir\x64\foo_dsp_speedy.dll"
 
-        # 创建版本包
-        $zipPath = "release\foo_dsp_speedy-$version.zip"
-        $componentPath = "release\foo_dsp_speedy-$version.fb2k-component"
+        # Create single fb2k-component package
+        $componentPath = "foo_dsp_speedy.fb2k-component"
+        Compress-Archive -Path "$stageDir\*" -DestinationPath $componentPath -Force
 
-        Compress-Archive -Path "$stageDir\*" -DestinationPath $zipPath -Force
-        Move-Item $zipPath $componentPath -Force
-
-        # 创建 latest 包
-        $latestZip = "release\foo_dsp_speedy-latest.zip"
-        $latestComponent = "release\foo_dsp_speedy-latest.fb2k-component"
-
-        Compress-Archive -Path "$stageDir\*" -DestinationPath $latestZip -Force
-        Move-Item $latestZip $latestComponent -Force
-
-        Write-Host ""
-        Write-Host "Created packages:"
-        Get-ChildItem release\*.fb2k-component
+        Write-Host "Created: $componentPath"
 
     - name: Upload artifact
       uses: actions/upload-artifact@v4
       with:
         name: foo_dsp_speedy
-        path: release/*.fb2k-component
+        path: foo_dsp_speedy.fb2k-component
         retention-days: 90
 
     - name: Update latest release
@@ -147,7 +124,7 @@ jobs:
           Manual build from commit ${{ github.sha }}
 
           ## Installation
-          1. Download `foo_dsp_speedy-latest.fb2k-component`
+          1. Download `foo_dsp_speedy.fb2k-component`
           2. Double-click to install, or drag onto foobar2000
 
           ## Features
@@ -155,8 +132,7 @@ jobs:
           - Pitch control (0.5x - 2.0x)
           - Nonlinear speech acceleration
           - Supports both 32-bit and 64-bit foobar2000
-
-        files: release/*.fb2k-component
+        files: foo_dsp_speedy.fb2k-component
         prerelease: true
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
